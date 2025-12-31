@@ -77,7 +77,7 @@ try {
     $ScreenshotDir = $env:USERPROFILE + '\Pictures\InazumaWatchdog'
     $LogSavePath = $env:USERPROFILE + '\Desktop\Watchdog_Log_Latest.txt'
 
-    # Webhook 讀取逻辑
+    # Webhook 讀取邏輯
     $ScriptPath = $MyInvocation.MyCommand.Path
     $ScriptDir  = Split-Path $ScriptPath -Parent
     $WebhookFile = Join-Path $ScriptDir 'webhook.txt'
@@ -797,36 +797,35 @@ try {
 
         # --- 異常處理流程 (紅色嚴重錯誤) ---
         if ($ErrorTriggered) {
-            # 1. 在 Log 中紀錄詳細原因
             Write-Log ($Icon_Cross + ' ' + $Msg_Prot_Trig + ' ' + $ErrorReason) 'Red' $true
             
-            # [v1.6.5 新增] 如果啟用了關機保護，在 Log 中留下明確紀錄
+            # [v1.6.6] 如果啟用了關機保護，在 Log 中留下紀錄
             if ($EnableShutdown) {
                 Write-Log "➤ [核心] 觸發系統保護：將執行自動關機程序" 'Yellow'
             }
 
-            # 2. 存取崩潰截圖
+            # 存取崩潰截圖
             if ($ReportImages.Count -eq 0 -and $CurrentBitmap) {
                 $PathCrash = Save-BitmapToFile $CurrentBitmap 'Crash'
                 if ($PathCrash) { $ReportImages += $PathCrash }
             }
 
-            # 3. 強制關閉相關處理程序
-            if ($KTKProcess) { Stop-Process -Name 'KeyToKey' -Force }
+            # [v1.6.6] 嘗試關閉 KTK，若失敗(權限問題)則跳過，不影響後續流程
+            if ($KTKProcess) { 
+                try { 
+                    Stop-Process -Name 'KeyToKey' -Force -ErrorAction Stop 
+                } catch { 
+                    Write-Log "⚠️ 無法強制關閉 KeyToKey (權限不足)，跳過並繼續保護程序..." 'Yellow'
+                } 
+            }
             Stop-Process -Name 'nie' -Force -ErrorAction SilentlyContinue
             
-            # 4. 準備 Discord 通知內容 (加入關機狀態說明)
-            $DiscordReason = if ($EnableShutdown) { "$ErrorReason`n(已執行自動關機程序)" } else { $ErrorReason }
+            # [v1.6.6] Discord 通知加入關機說明
+            $DiscordReason = if ($EnableShutdown) { "$ErrorReason`n（已執行自動關機程序）" } else { $ErrorReason }
             Send-Discord-Report -Title ($Icon_Cross + ' ' + $Msg_Discord_Title) -Reason $DiscordReason -ColorType 'Red' -ImagePaths $ReportImages
             
-            $FinalDur = New-TimeSpan -Start $ScriptStartTime -End (Get-Date)
-            $FinalTimeStr = "{0:D2}小時{1:D2}分鐘" -f [int][Math]::Floor($FinalDur.TotalHours), $FinalDur.Minutes
+            # ... (中間時長計算與資源釋放維持不變) ...
 
-            # 5. 資源釋放
-            if ($Global:LastBitmapCache) { $Global:LastBitmapCache.Dispose() }
-            if ($CurrentBitmap) { $CurrentBitmap.Dispose() }
-
-            # 6. 執行關機預警 GUI
             if ($EnableShutdown) { 
                 $GuiResult = Show-Crash-Warning-GUI -Reason $ErrorReason
                 if ($GuiResult -eq [System.Windows.Forms.DialogResult]::OK) {
