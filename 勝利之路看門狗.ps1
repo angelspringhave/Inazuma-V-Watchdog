@@ -76,7 +76,7 @@ try {
     # 1. User Settings（使用者設定區）
     # ==========================================
     $KeyToKeyPath = 'D:\Users\user\Downloads\KeyToKey\KeyToKey.exe'
-    $ScreenshotDir = "D:\Users\user\Desktop\勝利之路看門狗\Crash_ScreenShot"
+    $ScreenshotDir = "D:\Users\user\Desktop\勝利之路看門狗"
     $LogSavePath = $env:USERPROFILE + '\Desktop\Watchdog_Log_Latest.txt'
 
     # Webhook 讀取邏輯
