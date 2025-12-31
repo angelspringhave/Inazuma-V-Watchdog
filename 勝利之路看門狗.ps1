@@ -5,7 +5,7 @@
     Update:在關閉 Steam 視窗之後，立刻強制把焦點抓回遊戲身上
     Add:關機程序紀錄：執行關機前，會於控制台 Log 與 Discord 通知中明確標註執行自動關機
     Update:當觸發關機嘗試關閉 KTK時，若因權限問題失敗則跳過，不影響後續關機流程
-    Fix:修復崩潰時C槽圖片檔案裡截圖沒有自動刪除的問題
+    Fix:修復崩潰時圖片檔案裡截圖沒有自動刪除的問題
 #>
 
 # ==========================================
@@ -76,7 +76,7 @@ try {
     # 1. User Settings（使用者設定區）
     # ==========================================
     $KeyToKeyPath = 'D:\Users\user\Downloads\KeyToKey\KeyToKey.exe'
-    $ScreenshotDir = $env:USERPROFILE + '\Pictures\InazumaWatchdog'
+    $ScreenshotDir = "D:\Users\user\Desktop\勝利之路看門狗\Crash_ScreenShot"
     $LogSavePath = $env:USERPROFILE + '\Desktop\Watchdog_Log_Latest.txt'
 
     # Webhook 讀取邏輯
@@ -807,12 +807,20 @@ try {
 
         # --- 異常處理流程 (紅色嚴重錯誤) ---
         if ($ErrorTriggered) {
+            # 1. 計算時長 (變數供後續使用)
+            $FinalDur = New-TimeSpan -Start $ScriptStartTime -End (Get-Date)
+            $FinalTimeStr = "{0:D2}小時{1:D2}分鐘" -f [int][Math]::Floor($FinalDur.TotalHours), $FinalDur.Minutes
+
+            # 2. 顯示：❌ 觸發保護
             Write-Log ($Icon_Cross + ' ' + $Msg_Prot_Trig + ' ' + $ErrorReason) 'Red' $true
             
-            # [v1.6.4] 如果啟用了關機保護，在 Log 中留下紀錄
+            # 3. 顯示：➤ 觸發系統保護 (若有開啟關機)
             if ($EnableShutdown) {
-                Write-Log "➤ [核心] 觸發系統保護：將執行自動關機程序" 'Yellow'
+                Write-Log "➤ 將執行自動關機程序" 'Yellow'
             }
+
+            # 4. 顯示：⏱️ 本次共掛機 (您要求放在核心保護之後)
+            Write-Log "⏱️ 本次共掛機：$FinalTimeStr" 'Cyan'
 
             # 存取崩潰截圖
             if ($ReportImages.Count -eq 0 -and $CurrentBitmap) {
@@ -820,7 +828,7 @@ try {
                 if ($PathCrash) { $ReportImages += $PathCrash }
             }
 
-            # [v1.6.4] 嘗試關閉 KTK，若失敗(權限問題)則跳過，不影響後續流程
+            # [修正] 嘗試關閉 KTK，若失敗(權限問題)則跳過，防止看門狗報錯閃退
             if ($KTKProcess) { 
                 try { 
                     Stop-Process -Name 'KeyToKey' -Force -ErrorAction Stop 
@@ -830,11 +838,13 @@ try {
             }
             Stop-Process -Name 'nie' -Force -ErrorAction SilentlyContinue
             
-            # [v1.6.4] Discord 通知加入關機說明
-            $DiscordReason = if ($EnableShutdown) { "$ErrorReason`n已執行自動關機程序" } else { $ErrorReason }
+            # 發送 Discord 通知 (加入排版好的關機說明)
+            $DiscordReason = if ($EnableShutdown) { "$ErrorReason`n(已執行自動關機程序)" } else { $ErrorReason }
             Send-Discord-Report -Title ($Icon_Cross + ' ' + $Msg_Discord_Title) -Reason $DiscordReason -ColorType 'Red' -ImagePaths $ReportImages
             
-            # ... (中間時長計算與資源釋放維持不變) ...
+            # 資源釋放
+            if ($Global:LastBitmapCache) { $Global:LastBitmapCache.Dispose() }
+            if ($CurrentBitmap) { $CurrentBitmap.Dispose() }
 
             if ($EnableShutdown) { 
                 $GuiResult = Show-Crash-Warning-GUI -Reason $ErrorReason
@@ -842,10 +852,10 @@ try {
                     Write-Log $Msg_Shutdown 'Red'; Stop-Computer -Force; exit 
                 } else {
                     Write-Log "使用者已取消關機。" 'Yellow'
-                    Write-Log "⏱️ 本次總掛機時長：$FinalTimeStr" 'Cyan'; Write-Log $Msg_Stop_Monitor 'Red'; Read-Host; exit
+                    Write-Log $Msg_Stop_Monitor 'Red'; Read-Host; exit
                 }
             } else {
-                Write-Log "⏱️ 本次總掛機時長：$FinalTimeStr" 'Cyan'; Write-Log $Msg_Stop_Monitor 'Red'; Read-Host; exit
+                Write-Log $Msg_Stop_Monitor 'Red'; Read-Host; exit
             }
         }
 
