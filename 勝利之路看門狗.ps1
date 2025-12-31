@@ -1,6 +1,9 @@
 ﻿<#
     【勝利之路 & KeyToKey 看門狗 v1.6.4】
-    修正並美化了關機警告彈出視窗
+    Fix:修正並美化了關機警告彈出視窗
+    Fix:因為檢測的邏輯順序而發生如果是因為GPU問題導致遊戲崩潰卻不會顯示GPU有問題的歷史紀錄
+    Update:在關閉 Steam 視窗之後，立刻強制把焦點抓回遊戲身上
+    Add:關機程序紀錄：執行關機前，會於控制台 Log 與 Discord 通知中明確標註「執行自動關機」
 #>
 
 # ==========================================
@@ -794,28 +797,36 @@ try {
 
         # --- 異常處理流程 (紅色嚴重錯誤) ---
         if ($ErrorTriggered) {
+            # 1. 在 Log 中紀錄詳細原因
             Write-Log ($Icon_Cross + ' ' + $Msg_Prot_Trig + ' ' + $ErrorReason) 'Red' $true
             
-            # 如果不是因為凍結觸發的(沒存過圖)，且當下有畫面，就存一張 Crash 圖
+            # [v1.6.5 新增] 如果啟用了關機保護，在 Log 中留下明確紀錄
+            if ($EnableShutdown) {
+                Write-Log "➤ [核心] 觸發系統保護：將執行自動關機程序" 'Yellow'
+            }
+
+            # 2. 存取崩潰截圖
             if ($ReportImages.Count -eq 0 -and $CurrentBitmap) {
                 $PathCrash = Save-BitmapToFile $CurrentBitmap 'Crash'
                 if ($PathCrash) { $ReportImages += $PathCrash }
             }
 
-            # 強制關閉相關程式
+            # 3. 強制關閉相關處理程序
             if ($KTKProcess) { Stop-Process -Name 'KeyToKey' -Force }
             Stop-Process -Name 'nie' -Force -ErrorAction SilentlyContinue
             
-            # 發送 Discord 報警 (紅燈：附日誌)
-            Send-Discord-Report -Title ($Icon_Cross + ' ' + $Msg_Discord_Title) -Reason $ErrorReason -ColorType 'Red' -ImagePaths $ReportImages
+            # 4. 準備 Discord 通知內容 (加入關機狀態說明)
+            $DiscordReason = if ($EnableShutdown) { "$ErrorReason`n(已執行自動關機程序)" } else { $ErrorReason }
+            Send-Discord-Report -Title ($Icon_Cross + ' ' + $Msg_Discord_Title) -Reason $DiscordReason -ColorType 'Red' -ImagePaths $ReportImages
             
             $FinalDur = New-TimeSpan -Start $ScriptStartTime -End (Get-Date)
             $FinalTimeStr = "{0:D2}小時{1:D2}分鐘" -f [int][Math]::Floor($FinalDur.TotalHours), $FinalDur.Minutes
 
-            # 釋放資源後退出
+            # 5. 資源釋放
             if ($Global:LastBitmapCache) { $Global:LastBitmapCache.Dispose() }
             if ($CurrentBitmap) { $CurrentBitmap.Dispose() }
 
+            # 6. 執行關機預警 GUI
             if ($EnableShutdown) { 
                 $GuiResult = Show-Crash-Warning-GUI -Reason $ErrorReason
                 if ($GuiResult -eq [System.Windows.Forms.DialogResult]::OK) {
