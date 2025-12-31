@@ -3,7 +3,9 @@
     Fix:修正並美化了關機警告彈出視窗
     Fix:因為檢測的邏輯順序而發生如果是因為GPU問題導致遊戲崩潰卻不會顯示GPU有問題的歷史紀錄
     Update:在關閉 Steam 視窗之後，立刻強制把焦點抓回遊戲身上
-    Add:關機程序紀錄：執行關機前，會於控制台 Log 與 Discord 通知中明確標註「執行自動關機」
+    Add:關機程序紀錄：執行關機前，會於控制台 Log 與 Discord 通知中明確標註執行自動關機
+    Update:當觸發關機嘗試關閉 KTK時，若因權限問題失敗則跳過，不影響後續關機流程
+    Fix:修復崩潰時C槽圖片檔案裡截圖沒有自動刪除的問題
 #>
 
 # ==========================================
@@ -499,8 +501,16 @@ try {
             if ($Form) { $Form.Dispose() }
         }
 
+        # 修復：等待 1 秒確保 HttpClient 徹底釋放檔案，再執行刪除
+        Start-Sleep -Seconds 1
+        
+        # 刪除暫存截圖
         foreach ($Path in $ImagePaths) {
             if (Test-Path $Path) { try { Remove-Item $Path -Force -ErrorAction SilentlyContinue } catch {} }
+        }
+        # 確保日誌也被刪除
+        if (Test-Path $LogSavePath) {
+            try { Remove-Item $LogSavePath -Force -ErrorAction SilentlyContinue } catch {}
         }
     }
 
@@ -799,7 +809,7 @@ try {
         if ($ErrorTriggered) {
             Write-Log ($Icon_Cross + ' ' + $Msg_Prot_Trig + ' ' + $ErrorReason) 'Red' $true
             
-            # [v1.6.6] 如果啟用了關機保護，在 Log 中留下紀錄
+            # [v1.6.4] 如果啟用了關機保護，在 Log 中留下紀錄
             if ($EnableShutdown) {
                 Write-Log "➤ [核心] 觸發系統保護：將執行自動關機程序" 'Yellow'
             }
@@ -810,7 +820,7 @@ try {
                 if ($PathCrash) { $ReportImages += $PathCrash }
             }
 
-            # [v1.6.6] 嘗試關閉 KTK，若失敗(權限問題)則跳過，不影響後續流程
+            # [v1.6.4] 嘗試關閉 KTK，若失敗(權限問題)則跳過，不影響後續流程
             if ($KTKProcess) { 
                 try { 
                     Stop-Process -Name 'KeyToKey' -Force -ErrorAction Stop 
@@ -820,8 +830,8 @@ try {
             }
             Stop-Process -Name 'nie' -Force -ErrorAction SilentlyContinue
             
-            # [v1.6.6] Discord 通知加入關機說明
-            $DiscordReason = if ($EnableShutdown) { "$ErrorReason`n（已執行自動關機程序）" } else { $ErrorReason }
+            # [v1.6.4] Discord 通知加入關機說明
+            $DiscordReason = if ($EnableShutdown) { "$ErrorReason`n已執行自動關機程序" } else { $ErrorReason }
             Send-Discord-Report -Title ($Icon_Cross + ' ' + $Msg_Discord_Title) -Reason $DiscordReason -ColorType 'Red' -ImagePaths $ReportImages
             
             # ... (中間時長計算與資源釋放維持不變) ...
