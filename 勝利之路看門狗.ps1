@@ -90,7 +90,7 @@ try {
     }
 
     # 監控參數
-    $LoopIntervalSeconds = 90  # 每次檢測的間隔秒數
+    $LoopIntervalSeconds = 75  # 每次檢測的間隔秒數 # 降為 75 秒，加上處理時間後，總間隔會接近 90 秒 (1:30)
     $FreezeThreshold = 3       # 連續畫面凍結幾次才判定為當機
     $NoResponseThreshold = 3   # 連續無回應幾次才判定為卡死
     $FreezeSimilarity = 98.5   # 畫面相似度閾值 (%)
