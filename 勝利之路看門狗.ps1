@@ -808,18 +808,28 @@ try {
         }
 
         # 4. 檢測：Windows 系統錯誤事件 (Event Log)
-        if (!$ErrorTriggered) {
-            $TimeLimit = (Get-Date).AddSeconds(-($LoopIntervalSeconds + 10))
-            # 偵測常見顯卡驅動崩潰與系統錯誤 ID
-            $KernelErrors = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,41,117} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $TimeLimit }
-            if ($KernelErrors) {
+        # 即使前面已經觸發(例如凍結)，也要檢查是否有系統錯誤，因為那通常是根本原因
+        $TimeLimit = (Get-Date).AddSeconds(-($LoopIntervalSeconds + 30)) # 擴大搜尋範圍
+        # 增加偵測 ID: 10016 (DCOM權限, 常見當機前兆)
+        $KernelErrors = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,41,117,10016} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $TimeLimit }
+        
+        if ($KernelErrors) {
+            $RecentError = $KernelErrors | Select-Object -First 1
+            $SysErrMsg = $Msg_Err_Reason + ' ' + $RecentError.Id + ')'
+            
+            if ($ErrorTriggered) {
+                # 如果已經有錯誤(例如畫面凍結)，這很有可能是主因，將其追加到原因中
+                $ErrorReason += "`n[系統紀錄] $SysErrMsg"
+                # 在 Log 中補上一筆紅色紀錄
+                Write-Log ($Icon_Cross + ' 補充偵測：' + $SysErrMsg) 'Red'
+            } else {
+                # 如果還沒觸發，這就是主因
                 $ErrorTriggered = $true
-                $RecentError = $KernelErrors | Select-Object -First 1
-                $ErrorReason = $Msg_Err_Reason + ' ' + $RecentError.Id + ')'
+                $ErrorReason = $SysErrMsg
                 Write-Log ($Icon_Cross + ' ' + $Msg_Err_Sys + ' ' + $RecentError.Id) 'Red'
             }
         }
-
+        
         # --- 異常處理流程 (紅色嚴重錯誤) ---
         if ($ErrorTriggered) {
             # 1. 計算時長 (變數供後續使用)
