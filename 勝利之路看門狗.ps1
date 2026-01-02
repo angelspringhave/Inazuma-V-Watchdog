@@ -130,6 +130,8 @@ try {
         [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+        [DllImport("user32.dll")] public static extern IntPtr LoadKeyboardLayout(string pwszKLID, uint Flags);
+        [DllImport("user32.dll")] public static extern bool ActivateKeyboardLayout(IntPtr hkl, uint Flags);
         public const int SW_RESTORE = 9;
     }
 
@@ -226,6 +228,18 @@ try {
                 [Win32Tools]::SetForegroundWindow($Handle) | Out-Null
             }
         }
+    }
+
+    # -----------------------------------------------------------
+    # 函式：Ensure-English-IME 
+    # 功能：強制切換輸入法為英文 (0x0409)，避免 KTK 送出注音/拼音
+    # -----------------------------------------------------------
+    function Ensure-English-IME {
+        try {
+            # 00000409 代表美式英文，1 (KLF_ACTIVATE) 代表立即啟用
+            $HKL = [Win32Tools]::LoadKeyboardLayout("00000409", 1) 
+            [Win32Tools]::ActivateKeyboardLayout($HKL, 0) | Out-Null
+        } catch {}
     }
 
     # -----------------------------------------------------------
@@ -677,6 +691,7 @@ try {
 
     while ($true) {
         Ensure-Game-TopMost
+        Ensure-English-IME
         
         # --- 倒數計時動畫 ---
         for ($i = $LoopIntervalSeconds; $i -gt 0; $i--) {
