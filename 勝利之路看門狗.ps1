@@ -666,7 +666,7 @@ try {
 
     # 詢問心跳頻率
     Write-Host ''
-    Write-Host '[設定] 請輸入 Discord 定期回報間隔 (分鐘) [按 Enter 預設: 10]' -ForegroundColor Yellow
+    Write-Host '[設定] 請輸入 Discord 定期回報間隔 (分鐘) [按 Enter 預設: 10 分鐘]' -ForegroundColor Yellow
     $InputInterval = Read-Host '請輸入'
     if (![string]::IsNullOrWhiteSpace($InputInterval) -and ($InputInterval -match '^\d+$')) {
         $Global:HeartbeatInterval = [int]$InputInterval
@@ -750,19 +750,19 @@ try {
         if (!$GameProcess) { 
             $ErrorTriggered = $true
             
-            # [v1.6.4 優化] 發現崩潰時，優先進行「驗屍」：檢查剛剛是否有系統硬體錯誤 (如 141)
-            # 往前多追溯 30 秒，確保能抓到導致崩潰的瞬間
-            $TimeLimit = (Get-Date).AddSeconds(-($LoopIntervalSeconds + 30))
-            $KernelErrors = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,41,117} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $TimeLimit }
+            # [修正] 搜尋範圍擴大為 5 分鐘，確保能抓到延遲寫入的日誌
+            $TimeLimit = (Get-Date).AddMinutes(-5) 
+            # [修正] 增加 ID 1001 (BugCheck) 與 10016 (DCOM)，移除 SilentlyContinue 以便除錯
+            $KernelErrors = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,41,117,10016,1001} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $TimeLimit }
             
             if ($KernelErrors) {
-                # 如果找到系統錯誤，優先使用系統錯誤作為原因
                 $RecentError = $KernelErrors | Select-Object -First 1
-                $ErrorReason = $Msg_Err_Reason + ' ' + $RecentError.Id + ')'
-                # 在 Log 裡也特別標註一下
+                $SysErrMsg = $Msg_Err_Reason + ' ' + $RecentError.Id + ')'
+                # 將系統錯誤加入原因
+                $ErrorReason = $SysErrMsg
                 Write-Log ($Icon_Cross + ' 偵測到程式消失，且發現系統錯誤 ID: ' + $RecentError.Id) 'Red'
             } else {
-                # 沒找到系統錯誤，才判定為一般崩潰
+                # 沒找到系統錯誤 (可能是手動關閉，或是權限不足)
                 $ErrorReason = $Msg_Err_Crash 
             }
         }
@@ -808,20 +808,20 @@ try {
         }
 
         # 4. 檢測：Windows 系統錯誤事件 (Event Log)
-        # 即使前面已經觸發(例如凍結)，也要檢查是否有系統錯誤，因為那通常是根本原因
-        $TimeLimit = (Get-Date).AddSeconds(-($LoopIntervalSeconds + 30)) # 擴大搜尋範圍
-        # 增加偵測 ID: 10016 (DCOM權限, 常見當機前兆)
-        $KernelErrors = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,41,117,10016} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $TimeLimit }
+        # [修正] 不管前面有沒有觸發，都檢查一次，確保不會漏掉凍結時的系統錯誤
+        $TimeLimit = (Get-Date).AddMinutes(-5)
+        $KernelErrors = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,41,117,10016,1001} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $TimeLimit }
         
         if ($KernelErrors) {
             $RecentError = $KernelErrors | Select-Object -First 1
             $SysErrMsg = $Msg_Err_Reason + ' ' + $RecentError.Id + ')'
             
             if ($ErrorTriggered) {
-                # 如果已經有錯誤(例如畫面凍結)，這很有可能是主因，將其追加到原因中
-                $ErrorReason += "`n[系統紀錄] $SysErrMsg"
-                # 在 Log 中補上一筆紅色紀錄
-                Write-Log ($Icon_Cross + ' 補充偵測：' + $SysErrMsg) 'Red'
+                # 如果已經有錯誤(例如畫面凍結)，追加顯示
+                if ($ErrorReason -notmatch $RecentError.Id) {
+                    $ErrorReason += "`n[系統紀錄] $SysErrMsg"
+                    Write-Log ($Icon_Cross + ' 補充偵測：' + $SysErrMsg) 'Red'
+                }
             } else {
                 # 如果還沒觸發，這就是主因
                 $ErrorTriggered = $true
@@ -916,7 +916,7 @@ try {
 
         # --- KTK 自動修復 (如果遊戲還在但腳本掛了) ---
         if ($GameProcess -and !$KTKProcess) {
-            Write-Log ($Icon_Start + ' ' + $Msg_KTK_Restart) 'White' $true
+            Write-Log ('➤ ' + $Msg_KTK_Restart) 'White' $true
             if (Test-Path $KeyToKeyPath) {
                 Start-Process $KeyToKeyPath
                 Write-Log $Msg_Wait_Load 'DarkGray'; Start-Sleep 35
