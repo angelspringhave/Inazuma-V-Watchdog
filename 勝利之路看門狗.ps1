@@ -853,12 +853,13 @@ try {
                 if ($PathCrash) { $ReportImages += $PathCrash }
             }
 
-            # [修正] 嘗試關閉 KTK，若失敗(權限問題)則跳過，防止看門狗報錯閃退
+            # [修正] 嘗試關閉 KTK，捕捉真實錯誤訊息，不再武斷判定為權限問題
             if ($KTKProcess) { 
                 try { 
                     Stop-Process -Name 'KeyToKey' -Force -ErrorAction Stop 
                 } catch { 
-                    Write-Log "⚠️ 無法強制關閉 KeyToKey (權限不足)，跳過並繼續保護程序..." 'Yellow'
+                    # 顯示系統回傳的真實錯誤原因 (例如：存取被拒、處理程序已結束...等)
+                    Write-Log "⚠️ 無法強制關閉 KeyToKey: $($_.Exception.Message)" 'Yellow'
                 } 
             }
             Stop-Process -Name 'nie' -Force -ErrorAction SilentlyContinue
