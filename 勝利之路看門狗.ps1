@@ -132,6 +132,10 @@ try {
         [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+        
+        // 硬體級按鍵模擬 API
+        [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+        public const int KEYEVENTF_KEYUP = 0x0002;
         public const int SW_RESTORE = 9;
     }
 
@@ -231,16 +235,29 @@ try {
 
     # -----------------------------------------------------------
     # 函式：Send-Key-Native
-    # 功能：使用 SendKeys 模擬鍵盤按鍵輸入 (用於重啟 KTK)
+    # 功能：使用 keybd_event 模擬實體鍵盤訊號 (用於重啟 KTK)
     # -----------------------------------------------------------
     function Send-Key-Native ($KeyName) {
         try {
-            $KeyStr = '{' + $KeyName + '}'
-            [System.Windows.Forms.SendKeys]::SendWait($KeyStr)
+            # 1. 嘗試解析按鍵代碼 (例如 "F7" -> 118)
+            $VK = [System.Windows.Forms.Keys]::Parse([System.Windows.Forms.Keys], $KeyName)
+            $KeyCode = [byte][int]$VK
+            
+            # 2. 使用硬體訊號模擬：按下 -> 等待 -> 放開
+            [Win32Tools]::keybd_event($KeyCode, 0, 0, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 100
+            [Win32Tools]::keybd_event($KeyCode, 0, [Win32Tools]::KEYEVENTF_KEYUP, [UIntPtr]::Zero)
+            
             return $true
-        } catch { return $false }
+        } catch {
+            # 3. 如果解析失敗，退回舊版 SendKeys
+            try {
+                $KeyStr = '{' + $KeyName + '}'
+                [System.Windows.Forms.SendKeys]::SendWait($KeyStr)
+                return $true
+            } catch { return $false }
+        }
     }
-
     # -----------------------------------------------------------
     # 函式：Show-Crash-Warning-GUI
     # 功能：顯示警告視窗，倒數 60 秒後自動關機
@@ -585,7 +602,20 @@ try {
     
     if ((Get-Process -Name 'nie' -ErrorAction SilentlyContinue) -and !(Get-Process -Name 'KeyToKey' -ErrorAction SilentlyContinue)) {
         Write-Log "➤ 初始檢查：KeyToKey 未執行，嘗試啟動..." 'Yellow'
-        if (Test-Path $KeyToKeyPath) { Start-Process $KeyToKeyPath; Start-Sleep 5 }
+        if (Test-Path $KeyToKeyPath) { 
+            Start-Process $KeyToKeyPath
+            Write-Log $Msg_Wait_Load 'DarkGray'; Start-Sleep 35
+            
+            # 抓取視窗並按下熱鍵
+            $NewKTK = Get-Process -Name 'KeyToKey' -ErrorAction SilentlyContinue
+            if ($NewKTK) {
+                [Win32Tools]::ShowWindow($NewKTK.MainWindowHandle, [Win32Tools]::SW_RESTORE) | Out-Null
+                [Win32Tools]::SetForegroundWindow($NewKTK.MainWindowHandle) | Out-Null
+                Start-Sleep 1; Write-Log ($Msg_Send_Key + ' (' + $TargetKeyName + ')...') 'Cyan'
+                Send-Key-Native $TargetKeyName | Out-Null; Start-Sleep 1
+            }
+            Ensure-Game-TopMost
+        }
     }
 
     while ($true) {
