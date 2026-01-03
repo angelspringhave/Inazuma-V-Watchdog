@@ -669,11 +669,19 @@ try {
             
             if ($AllErrs) {
                 $RecentError = $AllErrs | Select-Object -First 1
-                $ErrCode = if ($RecentError.Id -eq 1001) { "LiveKernelEvent" } else { $RecentError.Id }
+                # [Fix] 嘗試從訊息中解析具體代碼 (141/117/1a1)
+            if ($RecentError.Id -eq 1001) {
+                if ($RecentError.Message -match '141') { $ErrCode = "LiveKernelEvent (141)" }
+                elseif ($RecentError.Message -match '117') { $ErrCode = "LiveKernelEvent (117)" }
+                elseif ($RecentError.Message -match '1a1') { $ErrCode = "LiveKernelEvent (1a1)" }
+                else { $ErrCode = "LiveKernelEvent (1001)" }
+            } else {
+                $ErrCode = $RecentError.Id
+            }
                 $SysErrMsg = $Msg_Err_Reason + ' ' + $ErrCode + ')'
                 # 將系統錯誤加入原因
                 $ErrorReason = $SysErrMsg
-                Write-Log ($Icon_Cross + ' 偵測到程式消失，且發現系統錯誤: ' + $ErrCode) 'Red'
+                Write-Log ($Icon_Cross + ' 偵測到程式消失，並發現系統錯誤: ' + $ErrCode) 'Red'
             } else { 
                 # 沒找到系統錯誤 (可能是手動關閉，或是權限不足)
                 $ErrorReason = $Msg_Err_Crash 
@@ -723,7 +731,15 @@ try {
         
         if ($AllErrs) {
             $RecentError = $AllErrs | Select-Object -First 1
-            $ErrCode = if ($RecentError.Id -eq 1001) { "LiveKernelEvent" } else { $RecentError.Id }
+            # 嘗試從訊息中解析具體代碼 (141/117/1a1)
+            if ($RecentError.Id -eq 1001) {
+                if ($RecentError.Message -match '141') { $ErrCode = "LiveKernelEvent (141)" }
+                elseif ($RecentError.Message -match '117') { $ErrCode = "LiveKernelEvent (117)" }
+                elseif ($RecentError.Message -match '1a1') { $ErrCode = "LiveKernelEvent (1a1)" }
+                else { $ErrCode = "LiveKernelEvent (1001)" }
+            } else {
+                $ErrCode = $RecentError.Id
+            }
             $SysErrMsg = $Msg_Err_Reason + ' ' + $ErrCode + ')'
             if ($ErrorTriggered) {
                 # 如果已經有錯誤(例如畫面凍結)，追加顯示
