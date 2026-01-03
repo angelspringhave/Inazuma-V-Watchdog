@@ -1,13 +1,4 @@
-﻿<#
-    【勝利之路 & KeyToKey 看門狗 v1.0.1】
-    Release Note:
-    1. [核心] 新增「雙重日誌偵測」機制，同時監控 System 與 Application (WER) 日誌，精準捕捉 LiveKernelEvent 141 等隱性顯卡錯誤。
-    2. [優化] 移除容易造成誤判的系統錯誤 ID (10016, 41, 1001)，僅保留顯卡死當偵測。
-    3. [優化] 移除強制切換輸入法。
-    4. [註解] 恢復詳細功能說明與維護註解。
-#>
-
-# ==========================================
+﻿# ==========================================
 # 0. Global Setup（全域環境設定)
 # ==========================================
 # 設定錯誤處理模式：遇到任何錯誤直接停止，方便我們攔截並報警，而不是讓它默默出錯。
@@ -34,7 +25,7 @@ try {
     $Icon_Stop   = [char]0x23F9 # ⏹️
 
     # --- 中文訊息設定 (集中管理，方便修改) ---
-    $Msg_Title_Start    = '看門狗 v1.0.1 已啟動'
+    $Msg_Title_Start    = '看門狗 v1.0.2 已啟動'
     $Msg_Reason_Start   = '啟動通知'
     $Msg_Title_Stop     = '監控已手動停止'
     $Msg_Reason_Stop    = '使用者主動結束監控'
@@ -75,7 +66,7 @@ try {
     $Msg_Wait_Load      = '等待 35 秒載入...'
     $Msg_Send_Key       = '發送按鍵'
     $Msg_Recovered      = '復原完畢'
-    $Msg_Footer_Base    = 'Watchdog v1.0.1'
+    $Msg_Footer_Base    = 'Watchdog v1.0.2'
     $Msg_Ask_Webhook    = '[設定] 初次執行，請輸入 Discord Webhook 網址 (輸入完畢按 Enter):'
     $Msg_Webhook_Saved  = '網址已儲存至 webhook.txt，下次將自動讀取。'
 
@@ -531,7 +522,7 @@ try {
     Clear-Host
     try { [Console]::CursorVisible = $true } catch {}
     Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host '   Victory Road & KeyToKey Watchdog v1.0.1' -ForegroundColor Cyan
+    Write-Host '   Victory Road & KeyToKey Watchdog v1.0.2' -ForegroundColor Cyan
     Write-Host '   (Release Version)' -ForegroundColor Cyan
     Write-Host '==========================================' -ForegroundColor Cyan
 
@@ -761,7 +752,7 @@ try {
             $FinalTimeStr = "{0:D2}小時{1:D2}分鐘" -f [int][Math]::Floor($FinalDur.TotalHours), $FinalDur.Minutes
 
             # 2. 顯示：❌ 觸發保護
-            Write-Log ($Icon_Cross + ' ' + $Msg_Prot_Trig + ' ' + $ErrorReason) 'Red' $true
+            Write-Log ($Icon_Cross + ' ' + $Msg_Prot_Trig + ' ' + $ErrorReason) 'Red'
             
             # 3. 顯示：➤ 觸發系統保護 (若有開啟關機)
             if ($EnableShutdown) { Write-Log "➤ 將執行自動關機程序" 'Yellow' }
