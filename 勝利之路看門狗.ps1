@@ -680,10 +680,9 @@ try {
             # 搜尋範圍擴大為 5 分鐘，確保能抓到延遲寫入的日誌
             $TimeLimit = (Get-Date).AddMinutes(-5) 
             
-            # [Core] 雙重偵測：同時抓 System (硬體) 與 Application (WER LiveKernelEvent)
-            # 移除 10016, 41 等干擾項
-            $SysErrs = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,117} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $TimeLimit }
-            $AppErrs = Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1001} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $TimeLimit -and $_.Message -match 'LiveKernelEvent' }
+            # 雙重偵測：同時抓指定時間內的 System (硬體) 與 Application (WER LiveKernelEvent)
+            $SysErrs = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,117; StartTime=$TimeLimit} -ErrorAction SilentlyContinue
+            $AppErrs = Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1001; StartTime=$TimeLimit} -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'LiveKernelEvent' }
             
             # 合併錯誤並排序
             $AllErrs = @($SysErrs) + @($AppErrs) | Sort-Object TimeCreated -Descending
@@ -746,8 +745,8 @@ try {
         # 4. 檢測：系統錯誤 (含凍結時) - 雙重偵測
         # 不管前面有沒有觸發，都檢查一次，確保不會漏掉凍結時的系統錯誤
         $TimeLimit = (Get-Date).AddMinutes(-5)
-        $SysErrs = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,117} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $TimeLimit }
-        $AppErrs = Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1001} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -gt $TimeLimit -and $_.Message -match 'LiveKernelEvent' }
+        $SysErrs = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,117; StartTime=$TimeLimit} -ErrorAction SilentlyContinue
+        $AppErrs = Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1001; StartTime=$TimeLimit} -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'LiveKernelEvent' }
         $AllErrs = @($SysErrs) + @($AppErrs) | Sort-Object TimeCreated -Descending
         
         if ($AllErrs) {
