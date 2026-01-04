@@ -25,7 +25,7 @@ try {
     $Icon_Stop   = [char]0x23F9 # ⏹️
 
     # --- 中文訊息設定 (集中管理，方便修改) ---
-    $Msg_Title_Start    = '看門狗 v1.0.2 已啟動'
+    $Msg_Title_Start    = '看門狗 v1.0.3 已啟動'
     $Msg_Reason_Start   = '啟動通知'
     $Msg_Title_Stop     = '監控已手動停止'
     $Msg_Reason_Stop    = '使用者主動結束監控'
@@ -66,7 +66,7 @@ try {
     $Msg_Wait_Load      = '等待 35 秒載入...'
     $Msg_Send_Key       = '發送按鍵'
     $Msg_Recovered      = '復原完畢'
-    $Msg_Footer_Base    = 'Watchdog v1.0.2'
+    $Msg_Footer_Base    = 'Watchdog v1.0.3'
     $Msg_Ask_Webhook    = '[設定] 初次執行，請輸入 Discord Webhook 網址 (輸入完畢按 Enter):'
     $Msg_Webhook_Saved  = '網址已儲存至 webhook.txt，下次將自動讀取。'
 
@@ -539,7 +539,7 @@ try {
     Clear-Host
     try { [Console]::CursorVisible = $true } catch {}
     Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host '   Victory Road & KeyToKey Watchdog v1.0.2' -ForegroundColor Cyan
+    Write-Host '   Victory Road & KeyToKey Watchdog v1.0.3' -ForegroundColor Cyan
     Write-Host '   (Release Version)' -ForegroundColor Cyan
     Write-Host '==========================================' -ForegroundColor Cyan
 
