@@ -43,7 +43,7 @@ try {
     $Msg_Err_Freeze     = '畫面凍結 (死機)'
     $Msg_Err_NoResp     = '程式無回應 (卡死)'
     $Msg_Err_Crash      = '程式崩潰 (消失)'
-    $Msg_Err_Sys        = '偵測到系統錯誤： ID'
+    $Msg_Err_Sys        = '偵測到系統錯誤：ID'
     $Msg_Err_Reason     = '系統嚴重錯誤 (ID:'
     $Msg_Prot_Trig      = '觸發保護：'
     
@@ -700,8 +700,8 @@ try {
             $AllErrs = @($SysErrs) + @($AppErrs) | Sort-Object TimeCreated -Descending
             
             if ($AllErrs) {
-                $RecentError = $AllErrs | Select-Object -First 1
-                # [Fix] 嘗試從訊息中解析具體代碼 (141/117/1a1)
+            $RecentError = $AllErrs | Select-Object -First 1
+            # 嘗試從訊息中解析具體代碼(141/117/1a1)
             if ($RecentError.Id -eq 1001) {
                 if ($RecentError.Message -match '141') { $ErrCode = "LiveKernelEvent (141)" }
                 elseif ($RecentError.Message -match '117') { $ErrCode = "LiveKernelEvent (117)" }
@@ -710,14 +710,14 @@ try {
             } else {
                 $ErrCode = $RecentError.Id
             }
-                $SysErrMsg = $Msg_Err_Reason + ' ' + $ErrCode + ')'
-                # 將系統錯誤加入原因
-                $ErrorReason = $SysErrMsg
-                Write-Log ($Icon_Cross + ' 偵測到程式消失，並發現系統錯誤: ' + $ErrCode) 'Red'
-            } else { 
-                # 沒找到系統錯誤 (可能是手動關閉，或是權限不足)
-                $ErrorReason = $Msg_Err_Crash 
+            $SysErrMsg = $Msg_Err_Reason + ' ' + $ErrCode + ')'
+
+            # 只有當「主要原因還沒被觸發」時，才會顯示系統錯誤，避免跟第一步重複。
+            if (-not $ErrorTriggered) {
+                $ErrorTriggered = $true; $ErrorReason = $SysErrMsg
+                Write-Log ($Icon_Cross + ' ' + $Msg_Err_Sys + $ErrCode) 'Red'
             }
+        }
         }
 
         # 2. 檢測：無回應
@@ -793,7 +793,7 @@ try {
             $FinalTimeStr = "{0:D2}小時{1:D2}分鐘" -f [int][Math]::Floor($FinalDur.TotalHours), $FinalDur.Minutes
 
             # 2. 顯示：❌ 觸發保護
-            Write-Log ($Icon_Cross + ' ' + $Msg_Prot_Trig + ' ' + $ErrorReason) 'Red'
+            Write-Log ($Icon_Cross + ' ' + $Msg_Prot_Trig + $ErrorReason) 'Red'
             
             # 3. 顯示：➤ 觸發系統保護 (若有開啟關機)
             if ($EnableShutdown) { Write-Log "➤ 將執行自動關機程序" 'Yellow' }
