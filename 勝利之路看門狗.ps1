@@ -90,7 +90,7 @@ try {
     } else { $DiscordWebhookUrl = '' }
 
     # 監控參數
-    $LoopIntervalSeconds = 75  # 每次檢測的間隔秒數 (降為 75 秒，加上處理時間後，總間隔會接近 90 秒)
+    $LoopIntervalSeconds = 75  # 每次檢測的間隔秒數 (降為 75 秒，加上處理時間後，Log 紀錄的間隔會接近 90 秒)
     $FreezeThreshold = 3       # 連續畫面凍結幾次才判定為當機
     $NoResponseThreshold = 3   # 連續無回應幾次才判定為卡死
     $FreezeSimilarity = 98.5   # 判定畫面凍結的相似度門檻 (%)
@@ -621,12 +621,16 @@ try {
     while ($true) {
         Ensure-Game-TopMost
         
-        # --- 倒數計時 ---
+        # [變數初始化] 先清空狀態字串，避免迴圈剛開始時顯示舊資料
+        $StatusStr = ""
+
+        # --- 倒數計時迴圈 ---
         for ($i = $LoopIntervalSeconds; $i -gt 0; $i--) {
-            # 將 Steam 攔截移入倒數迴圈，實現每秒監控
+            # 1. [每秒執行] Steam 干擾攔截
+            # 必須每秒都做，因為 Steam 視窗隨時會跳出來遮擋遊戲
             Suppress-Steam-Window
             
-            # [優雅退場] 偵測按 Q 鍵
+            # [功能] 優雅退場：偵測是否按下 Q 鍵
             if ([Console]::KeyAvailable) {
                 $k = [Console]::ReadKey($true)
                 if ($k.Key -eq 'Q') {
@@ -639,25 +643,33 @@ try {
                 }
             }
 
-            # 計算進度百分比 (確保在 $i=1 時進度為 100%)
+            # 2. [每 5 秒執行] 檢查遊戲與 KTK 運作狀態
+            # [優化原理] 因為 Get-Process 指令比較耗時，如果每秒都查，會導致倒數變慢 (時間膨脹)。改成每 5 秒查一次 (當秒數能被 5 整除時)，其他時間直接顯示舊狀態，既省效能又準時。
+            if ($i % 5 -eq 0) {
+                $CheckGame = Get-Process -Name 'nie' -ErrorAction SilentlyContinue
+                $CheckKTK = Get-Process -Name 'KeyToKey' -ErrorAction SilentlyContinue
+                $StatusStr = ''
+                if ($CheckGame) { if ($CheckGame.Responding) { $StatusStr += $Msg_Game_Run } else { $StatusStr += $Msg_Game_NoResp + ' ' + $Icon_Warn } } else { $StatusStr += $Msg_Game_Lost + ' ' + $Icon_Cross }
+                $StatusStr += ' | '
+                if ($CheckKTK)  { $StatusStr += $Msg_KTK_Run } else { $StatusStr += $Msg_KTK_Err + ' ' + $Icon_Warn }
+            }
+
+            # 計算進度條百分比 (確保在 $i=1 時進度為 100%)
             if ($LoopIntervalSeconds -gt 1) { $Percent = ($LoopIntervalSeconds - $i) / ($LoopIntervalSeconds - 1) } else { $Percent = 1 }
             $ProgressCount = [int][Math]::Floor($Percent * 20)
             
-            $CheckGame = Get-Process -Name 'nie' -ErrorAction SilentlyContinue
-            $CheckKTK = Get-Process -Name 'KeyToKey' -ErrorAction SilentlyContinue
-            $StatusStr = ''
-            if ($CheckGame) { if ($CheckGame.Responding) { $StatusStr += $Msg_Game_Run } else { $StatusStr += $Msg_Game_NoResp + ' ' + $Icon_Warn } } else { $StatusStr += $Msg_Game_Lost + ' ' + $Icon_Cross }
-            $StatusStr += ' | '
-            if ($CheckKTK)  { $StatusStr += $Msg_KTK_Run } else { $StatusStr += $Msg_KTK_Err + ' ' + $Icon_Warn }
-
-            # 游標閃爍效果 (每秒閃爍兩次)
+            # 強制游標起步至少為 1 (讓剛開始倒數時就有動靜，不會一片空白)
+            if ($ProgressCount -lt 1) { $ProgressCount = 1 }
+            
+            # 游標閃爍 (每秒閃爍兩次，每次 0.5 秒)
+            # 注意：這裡會顯示 $StatusStr，如果在沒更新的那 4 秒內，它會自動顯示上一次的狀態字串
             for ($blink = 0; $blink -lt 2; $blink++) {
                 $BarStr = ''
                 # 如果進度條已滿 (20格)，不再閃爍最後一格，確保視覺滿版
                 if ($ProgressCount -ge 20) { $BarStr = '=' * 20 } 
                 else { if ($ProgressCount -gt 0) { if ($blink -eq 0) { $BarStr = '=' * $ProgressCount } else { $BarStr = '=' * ($ProgressCount - 1) + ' ' } } }
                 $Bar = '[' + $BarStr + (' ' * (20 - $BarStr.Length)) + ']'
-                # 使用 `r (歸位) 覆蓋同一行文字
+                # 使用 `r (歸位字元) 覆蓋同一行文字，達成動畫效果
                 Write-Host ($CR + $Bar + " 倒數 $i 秒... (按 Q 停止) [ $StatusStr ]       ") -NoNewline -ForegroundColor Gray
                 Start-Sleep -Milliseconds 500
             }
