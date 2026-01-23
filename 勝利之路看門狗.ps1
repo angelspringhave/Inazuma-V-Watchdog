@@ -772,35 +772,47 @@ try {
             }
         }
 
-        # 4. 檢測：系統錯誤 (含凍結時) - 雙重偵測
-        # 不管前面有沒有觸發，都檢查一次，確保不會漏掉凍結時的系統錯誤
-        $TimeLimit = (Get-Date).AddMinutes(-5)
-        $SysErrs = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,117; StartTime=$TimeLimit} -ErrorAction SilentlyContinue
-        $AppErrs = Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1001; StartTime=$TimeLimit} -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'LiveKernelEvent' }
-        $AllErrs = @($SysErrs) + @($AppErrs) | Sort-Object TimeCreated -Descending
-        
-        if ($AllErrs) {
-            $RecentError = $AllErrs | Select-Object -First 1
-            # 嘗試從訊息中解析具體代碼 (141/117/1a1)
-            if ($RecentError.Id -eq 1001) {
-                if ($RecentError.Message -match '141') { $ErrCode = "LiveKernelEvent (141)" }
-                elseif ($RecentError.Message -match '117') { $ErrCode = "LiveKernelEvent (117)" }
-                elseif ($RecentError.Message -match '1a1') { $ErrCode = "LiveKernelEvent (1a1)" }
-                else { $ErrCode = "LiveKernelEvent (1001)" }
-            } else {
-                $ErrCode = $RecentError.Id
-            }
-            $SysErrMsg = $Msg_Err_Reason + ' ' + $ErrCode + ')'
-            if ($ErrorTriggered) {
-                # 如果已經有錯誤(例如畫面凍結)，追加顯示
-                if ($ErrorReason -notmatch $ErrCode) {
-                    $ErrorReason += "`n[系統紀錄] $SysErrMsg"
-                    Write-Log ($Icon_Cross + ' 補充偵測：' + $SysErrMsg) 'Red'
+        # ==========================================================================
+        # 4. [輔助檢測] 系統錯誤 (被動查驗模式)
+        #    邏輯：當遊戲已經出事了 (前面已經觸發 ErrorTriggered)，我們才來這裡查驗屍體。
+        #    目的：解決「有 141 錯誤但遊戲其實沒掛掉」導致的誤殺問題。
+        # ==========================================================================
+        if ($ErrorTriggered) {
+            # 只有當「已經發生異常 ($ErrorTriggered = $true)」時，才執行這段。
+            # 如果遊戲活得好好的，就算系統有 141 錯誤 (例如顯卡驅動重置)，我們也假裝沒看到，
+            # 讓遊戲繼續跑，絕對不主動殺它。
+            
+            $TimeLimit = (Get-Date).AddMinutes(-5)
+            
+            # [極速優化] 同樣使用 StartTime 進行秒讀
+            $SysErrs = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,117; StartTime=$TimeLimit} -ErrorAction SilentlyContinue
+            $AppErrs = Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1001; StartTime=$TimeLimit} -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'LiveKernelEvent' }
+            $AllErrs = @($SysErrs) + @($AppErrs) | Sort-Object TimeCreated -Descending
+            
+            if ($AllErrs) {
+                $RecentError = $AllErrs | Select-Object -First 1
+                
+                # [代碼解析] 
+                if ($RecentError.Id -eq 1001) {
+                    if ($RecentError.Message -match '141') { $ErrCode = "LiveKernelEvent (141)" }
+                    elseif ($RecentError.Message -match '117') { $ErrCode = "LiveKernelEvent (117)" }
+                    elseif ($RecentError.Message -match '1a1') { $ErrCode = "LiveKernelEvent (1a1)" }
+                    else { $ErrCode = "LiveKernelEvent (1001)" }
+                } else {
+                    $ErrCode = $RecentError.Id
                 }
-            } else {
-                # 如果還沒觸發，這就是主因
-                $ErrorTriggered = $true; $ErrorReason = $SysErrMsg
-                Write-Log ($Icon_Cross + ' ' + $Msg_Err_Sys + ' ' + $ErrCode) 'Red'
+                
+                # 組合錯誤訊息 (移除冒號後空格)
+                $SysErrMsg = $Msg_Err_Reason + $ErrCode + ')'
+                
+                # [靜默補充機制] (解決 "補充偵測" 廢話問題)
+                # 檢查現在的 $ErrorReason 裡面，是不是已經包含這個錯誤代碼了？
+                # - 如果已經有了：什麼都不做 (避免重複)。
+                # - 如果還沒有：偷偷把這行加到 $ErrorReason 變數裡。
+                # 注意：這裡不使用 Write-Log！我們只把資訊加進去，留給最後的 Discord 報告一次講完。
+                if ($ErrorReason -notmatch [regex]::Escape($ErrCode)) {
+                    $ErrorReason += "`n[系統紀錄] $SysErrMsg"
+                }
             }
         }
         
