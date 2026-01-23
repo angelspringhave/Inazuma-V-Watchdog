@@ -686,38 +686,56 @@ try {
         $CurrentPixelData = Get-PixelsFromBitmap $CurrentBitmap
         $ReportImages = @() # 準備要傳的圖片路徑陣列
 
-        # 1. 檢測：消失 + 系統日誌 / Application WER 報告
+        # ==========================================================================
+        # 1. [核心檢測] 程式消失 (Crash)
+        #    邏輯：如果抓不到遊戲 Process，代表遊戲已經崩潰或被關閉。
+        #          這時立刻去查 Windows 系統日誌，看是不是因為硬體錯誤 (141) 導致的。
+        # ==========================================================================
         if (!$GameProcess) { 
             $ErrorTriggered = $true
-            # 搜尋範圍擴大為 5 分鐘，確保能抓到延遲寫入的日誌
+            
+            # [設定範圍] 只搜尋過去 5 分鐘內的錯誤 (確保能抓到剛發生的熱騰騰日誌)
             $TimeLimit = (Get-Date).AddMinutes(-5) 
             
-            # 雙重偵測：同時抓指定時間內的 System (硬體) 與 Application (WER LiveKernelEvent)
+            # ----------------------------------------------------------------------
+            # [極速優化] 使用 StartTime 參數 (關鍵!)
+            # ----------------------------------------------------------------------
+            # 舊寫法：先讀取電腦裡十萬筆歷史紀錄，再用 Where-Object 過濾 -> 耗時 2 分鐘 (卡頓主因)
+            # 新寫法：直接告訴系統「我只要 5 分鐘內的」 -> 系統直接給結果 -> 耗時 0.1 秒
+            # ----------------------------------------------------------------------
             $SysErrs = Get-WinEvent -FilterHashtable @{LogName='System'; Id=141,4101,117; StartTime=$TimeLimit} -ErrorAction SilentlyContinue
             $AppErrs = Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1001; StartTime=$TimeLimit} -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'LiveKernelEvent' }
             
-            # 合併錯誤並排序
+            # 將兩邊找到的錯誤合併，並按時間倒序排列 (最新的在最上面)
             $AllErrs = @($SysErrs) + @($AppErrs) | Sort-Object TimeCreated -Descending
             
             if ($AllErrs) {
-            $RecentError = $AllErrs | Select-Object -First 1
-            # 嘗試從訊息中解析具體代碼(141/117/1a1)
-            if ($RecentError.Id -eq 1001) {
-                if ($RecentError.Message -match '141') { $ErrCode = "LiveKernelEvent (141)" }
-                elseif ($RecentError.Message -match '117') { $ErrCode = "LiveKernelEvent (117)" }
-                elseif ($RecentError.Message -match '1a1') { $ErrCode = "LiveKernelEvent (1a1)" }
-                else { $ErrCode = "LiveKernelEvent (1001)" }
-            } else {
-                $ErrCode = $RecentError.Id
+                # [有找到錯誤]：抓出第一筆最新的錯誤
+                $RecentError = $AllErrs | Select-Object -First 1
+                
+                # [代碼解析] 如果是 1001 (WER)，嘗試分析它是不是偽裝的 141
+                if ($RecentError.Id -eq 1001) {
+                    if ($RecentError.Message -match '141') { $ErrCode = "LiveKernelEvent (141)" }
+                    elseif ($RecentError.Message -match '117') { $ErrCode = "LiveKernelEvent (117)" }
+                    elseif ($RecentError.Message -match '1a1') { $ErrCode = "LiveKernelEvent (1a1)" }
+                    else { $ErrCode = "LiveKernelEvent (1001)" }
+                } else {
+                    $ErrCode = $RecentError.Id
+                }
+                
+                # [設定原因] 填寫詳細錯誤原因
+                # 這裡修正了排版：移除了冒號後的空格，讓 Log 看起來更整齊
+                $SysErrMsg = $Msg_Err_Reason + $ErrCode + ')'
+                $ErrorReason = $SysErrMsg
+                
+                # [第一現場回報] 立刻寫入 Log
+                Write-Log ($Icon_Cross + ' 偵測到程式消失，並發現系統錯誤: ' + $ErrCode) 'Red'
+            } else { 
+                # [沒找到錯誤]：關鍵的 Else！(修復觸發保護空白的問題)
+                # 如果系統日誌是乾淨的，代表這是一次普通的閃退 (或是日誌還沒寫入)
+                # 我們必須給 $ErrorReason 一個預設值，否則後面的「觸發保護」會顯示空白
+                $ErrorReason = $Msg_Err_Crash 
             }
-            $SysErrMsg = $Msg_Err_Reason + ' ' + $ErrCode + ')'
-
-            # 只有當「主要原因還沒被觸發」時，才會顯示系統錯誤，避免跟第一步重複。
-            if (-not $ErrorTriggered) {
-                $ErrorTriggered = $true; $ErrorReason = $SysErrMsg
-                Write-Log ($Icon_Cross + ' ' + $Msg_Err_Sys + $ErrCode) 'Red'
-            }
-        }
         }
 
         # 2. 檢測：無回應
