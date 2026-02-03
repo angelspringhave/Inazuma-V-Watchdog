@@ -862,7 +862,7 @@ try {
 
     # 詢問心跳頻率
     Write-Host ''
-    Write-Host '[設定] 請輸入 Discord 定期回報間隔 (分鐘) [預設: 5 分鐘]' -ForegroundColor Yellow
+    Write-Host '[設定] 請輸入 Discord 定期回報間隔 (分鐘) [預設: 3 分鐘]' -ForegroundColor Yellow
     $InputInterval = Read-Host '請輸入'
     if (![string]::IsNullOrWhiteSpace($InputInterval) -and ($InputInterval -match '^\d+$')) {
         $v = [int]$InputInterval
