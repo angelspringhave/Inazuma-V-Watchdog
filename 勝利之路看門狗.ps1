@@ -96,7 +96,7 @@ try {
     $Global:SessionLog = @()
     $Global:LastReportLogIndex = 0 # 紀錄上次回報到 Log 的哪一行
     $Global:LastHeartbeatTime = Get-Date
-    $Global:HeartbeatInterval = 3 # 分鐘
+    $Global:HeartbeatInterval = 5 # 分鐘
     $Global:LastBitmapCache = $null # 初始化上一張畫面的緩存 (用於凍結對比)
 
     # ==========================================
@@ -862,7 +862,7 @@ try {
 
     # 詢問心跳頻率
     Write-Host ''
-    Write-Host '[設定] 請輸入 Discord 定期回報間隔 (分鐘) [預設: 3 分鐘]' -ForegroundColor Yellow
+    Write-Host '[設定] 請輸入 Discord 定期回報間隔 (分鐘) [預設: 5 分鐘]' -ForegroundColor Yellow
     $InputInterval = Read-Host '請輸入'
     if (![string]::IsNullOrWhiteSpace($InputInterval) -and ($InputInterval -match '^\d+$')) {
         $v = [int]$InputInterval
